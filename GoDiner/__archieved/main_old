@@ -1,0 +1,117 @@
+package main
+
+import (
+	"sync"
+	"time"
+
+	"github.com/fatih/color"
+)
+
+// 5 filosofos, 5 garfos, 5 pratos, 2 garfos por vez
+// 1 – Cada Filósofo deve pegar um garfo de cada vez, a ordem não importa (esquerda ou direita).
+// 2 – Só é possível comer o macarrão com os dois garfos.
+// 3 – Quando não estiver comendo, o Filósofo deve ficar pensando.
+// 4 – Se um filósofo pega um garfo ele fica com ele na mão e não solta.
+
+type Garfo struct {
+	num     int
+	ocupado bool
+}
+
+type Filosofo struct {
+	name                 string
+	garfosPossiveis      [2]int
+	isComendo            bool
+	tempoPensando        int
+	tempoComendo         int
+	percentualSatisfeito int
+}
+
+func (f *Filosofo) pegarGarfo(mutex *sync.Mutex) bool {
+
+	//tentando pegar os garfos
+	garfoEsquerdo := Garfos[f.garfosPossiveis[0]]
+	garfoDireito := Garfos[f.garfosPossiveis[1]]
+
+	mutex.Lock()
+	if !garfoEsquerdo.ocupado && !garfoDireito.ocupado {
+		color.Cyan(f.name + " pegou os garfos")
+		Garfos[f.garfosPossiveis[0]].ocupado = true
+		Garfos[f.garfosPossiveis[1]].ocupado = true
+		mutex.Unlock()
+
+		return true
+	}
+	mutex.Unlock()
+	return false
+}
+
+func (f *Filosofo) comer(mutex *sync.Mutex) {
+
+	duracao := 2 * time.Second
+
+	for f.percentualSatisfeito < 100 {
+		if f.pegarGarfo(mutex) {
+			f.isComendo = true
+			f.percentualSatisfeito += 25
+			color.Cyan(f.name+" está comendo + %d satisfeito", f.percentualSatisfeito)
+			time.Sleep(duracao)
+			f.tempoComendo += 2
+
+			//liberar os garfos
+			Garfos[f.garfosPossiveis[0]].ocupado = false
+			Garfos[f.garfosPossiveis[1]].ocupado = false
+			f.isComendo = false
+		} else {
+			f.isComendo = false
+			color.Blue(f.name + " está pensando")
+			time.Sleep(duracao)
+			f.tempoPensando += 2
+		}
+	}
+
+	Wg.Done()
+}
+
+var Garfos []Garfo
+var Filosofos []Filosofo
+var Wg sync.WaitGroup
+
+func main() {
+
+	garfoMutex := sync.Mutex{}
+
+	//definire os garfos
+	Garfos = []Garfo{
+		{num: 1, ocupado: false},
+		{num: 2, ocupado: false},
+		{num: 3, ocupado: false},
+		{num: 4, ocupado: false},
+		{num: 5, ocupado: false},
+	}
+
+	//definir os filosofos
+	Filosofos = []Filosofo{
+		{name: "Sócrates", isComendo: false, tempoPensando: 0, tempoComendo: 0, garfosPossiveis: [2]int{4, 0}},
+		{name: "Platão", isComendo: false, tempoPensando: 0, tempoComendo: 0, garfosPossiveis: [2]int{0, 1}},
+		{name: "Aristóteles", isComendo: false, tempoPensando: 0, tempoComendo: 0, garfosPossiveis: [2]int{1, 2}},
+		{name: "Descartes", isComendo: false, tempoPensando: 0, tempoComendo: 0, garfosPossiveis: [2]int{2, 3}},
+		{name: "Kant", isComendo: false, tempoPensando: 0, tempoComendo: 0, garfosPossiveis: [2]int{4, 3}},
+	}
+
+	Wg.Add(5)
+
+	//em ordem cada filosofo pega um garfo
+	for _, filosofo := range Filosofos {
+		go filosofo.comer(&garfoMutex)
+		color.Green("%s Acabou de comer, pensou por %d segundos e comeu por %d segundos", filosofo.name, filosofo.tempoPensando, filosofo.tempoComendo)
+	}
+
+	Wg.Wait()
+
+	for _, filosofo := range Filosofos {
+		color.Green("%s Acabou de comer, pensou por %d segundos e comeu por %d segundos", filosofo.name, filosofo.tempoPensando, filosofo.tempoComendo)
+	}
+
+	color.Magenta("Fim do jantar")
+}
